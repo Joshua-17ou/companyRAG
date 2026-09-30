@@ -1,0 +1,155 @@
+/* 全局样式重置 */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 应用级导航 */
+.global-nav-menu.ant-menu {
+  background: transparent;
+  border-inline-end: 0;
+  padding: 8px 10px;
+}
+
+.global-nav-menu.ant-menu .ant-menu-item {
+  height: 44px;
+  line-height: 44px;
+  margin: 4px 0;
+  border-radius: 12px;
+  color: #536078;
+}
+
+.global-nav-menu.ant-menu .ant-menu-item-selected {
+  background: #e8efff;
+  color: #4169e1;
+  font-weight: 600;
+}
+
+.global-nav-menu.ant-menu .ant-menu-item:hover {
+  color: #4169e1;
+  background: #f0f4ff;
+}
+
+/* Markdown 内容样式 */
+.markdown-content {
+  line-height: 1.8;
+}
+
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3 {
+  margin-top: 16px;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.markdown-content h1 {
+  font-size: 20px;
+}
+
+.markdown-content h2 {
+  font-size: 18px;
+}
+
+.markdown-content h3 {
+  font-size: 16px;
+}
+
+.markdown-content p {
+  margin-bottom: 12px;
+}
+
+.markdown-content img {
+  display: block;
+  max-width: 85%;
+  max-height: 280px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  margin: 8px 0;
+  border-radius: 4px;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+  margin-left: 20px;
+  margin-bottom: 12px;
+}
+
+.markdown-content li {
+  margin-bottom: 4px;
+}
+
+.markdown-content code {
+  background: #f5f5f5;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 13px;
+}
+
+.markdown-content pre {
+  background: #f5f5f5;
+  padding: 12px;
+  border-radius: 4px;
+  overflow-x: auto;
+  margin-bottom: 12px;
+}
+
+.markdown-content pre code {
+  background: none;
+  padding: 0;
+}
+
+.markdown-content blockquote {
+  border-left: 4px solid #ddd;
+  padding-left: 12px;
+  color: #666;
+  margin-bottom: 12px;
+}
+
+.markdown-content table {
+  border-collapse: collapse;
+  width: 100%;
+  margin-bottom: 12px;
+}
+
+.markdown-content table th,
+.markdown-content table td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  text-align: left;
+}
+
+.markdown-content table th {
+  background: #f5f5f5;
+  font-weight: 600;
+}
+
+/* 滚动条样式 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}

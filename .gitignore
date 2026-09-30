@@ -1,0 +1,89 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs
+*.log
+logs/
+
+# Database
+postgres_data/
+redis_data/
+qdrant_storage/
+minio_data/
+
+# Git
+.git/
+
+# Project specific
+*.db
+*.sqlite
+*.sqlite3
+backups/
+
+# Runtime data — large, sensitive, or machine-generated
+docs/pdf_pages/
+docs/pdf_source/
+docs/images/
+models/
+.image_mapping.json
+
+# Claude session state
+.claude/
+
+# Node
+node_modules/
+frontend/node_modules/
+frontend/dist/
+
+_inspect_images/
+_trash_pdf_pages/
+ppt_unzip/
+temp_ragent/
+
+# Knowledge base content and docs (managed outside git)
+docs/
+*.md
+!README.md
+*_assets/

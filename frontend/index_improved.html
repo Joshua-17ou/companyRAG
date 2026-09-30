@@ -1,0 +1,749 @@
+<!-- 改进版HTML - 支持图片超时处理和加载优化 -->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>医院SPD规则库 - 搜索</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            color: #2c3e50;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            color: #7f8c8d;
+        }
+
+        /* 调试面板 */
+        .debug-panel {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            font-size: 0.85em;
+            display: none;
+        }
+
+        .debug-panel.show {
+            display: block;
+        }
+
+        .debug-toggle {
+            background: #e9ecef;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            margin-bottom: 10px;
+            transition: background 0.2s;
+        }
+
+        .debug-toggle:hover {
+            background: #dee2e6;
+        }
+
+        .debug-content {
+            background: white;
+            padding: 10px;
+            border-radius: 4px;
+            border-left: 3px solid #3498db;
+            color: #2c3e50;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        /* 搜索框 */
+        .search-box {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 40px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+        }
+
+        .search-box input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid #ecf0f1;
+            border-radius: 6px;
+            font-size: 1em;
+            transition: border-color 0.3s;
+        }
+
+        .search-box input:focus {
+            outline: none;
+            border-color: #3498db;
+            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+        }
+
+        .search-box button {
+            padding: 12px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 1em;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .search-box button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .search-box button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        /* 加载状态 */
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #7f8c8d;
+        }
+
+        .spinner {
+            border: 4px solid #ecf0f1;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* 结果卡片 */
+        .results {
+            display: grid;
+            gap: 20px;
+        }
+
+        .result-card {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .result-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+        }
+
+        .result-header {
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .result-header h2 {
+            font-size: 1.5em;
+            font-weight: 600;
+        }
+
+        .result-rank {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: 600;
+        }
+
+        .result-score {
+            color: #ecf0f1;
+            font-size: 0.9em;
+            margin-top: 8px;
+        }
+
+        .result-content {
+            padding: 25px;
+        }
+
+        .result-text {
+            color: #2c3e50;
+            line-height: 1.8;
+            margin-bottom: 20px;
+            font-size: 0.95em;
+            white-space: pre-wrap;
+            word-break: break-word;
+            max-height: 200px;
+            overflow-y: auto;
+            padding: 15px;
+            background: #f8f9fa;
+            border-left: 4px solid #3498db;
+            border-radius: 4px;
+        }
+
+        /* 图片部分 - 改进版 */
+        .images-section {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #ecf0f1;
+        }
+
+        .images-title {
+            font-size: 1em;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .images-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+        }
+
+        .image-card {
+            background: #f8f9fa;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid #ecf0f1;
+            transition: transform 0.3s, box-shadow 0.3s;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .image-card:hover {
+            transform: scale(1.02);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .image-container {
+            position: relative;
+            width: 100%;
+            padding-bottom: 75%;
+            overflow: hidden;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 188px;
+        }
+
+        .image-container img {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            padding: 8px;
+        }
+
+        /* 图片加载状态 */
+        .image-loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 2em;
+        }
+
+        .image-loading.spinner {
+            border: 3px solid #ecf0f1;
+            border-top: 3px solid #667eea;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            font-size: 1em;
+        }
+
+        .image-error {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: #e74c3c;
+            width: 100%;
+            padding: 10px;
+        }
+
+        .image-error-icon {
+            font-size: 2em;
+            margin-bottom: 5px;
+        }
+
+        .image-error-text {
+            font-size: 0.8em;
+        }
+
+        .image-info {
+            padding: 12px;
+            font-size: 0.85em;
+            color: #7f8c8d;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .image-hospital {
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 4px;
+        }
+
+        .image-filename {
+            color: #95a5a6;
+            font-size: 0.8em;
+            word-break: break-all;
+            margin-bottom: 8px;
+        }
+
+        .image-status {
+            font-size: 0.75em;
+            color: #95a5a6;
+        }
+
+        .image-status.loading {
+            color: #3498db;
+        }
+
+        .image-status.error {
+            color: #e74c3c;
+        }
+
+        .image-status.success {
+            color: #27ae60;
+        }
+
+        /* 错误提示 */
+        .error-message {
+            background: #fee;
+            color: #c33;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #c33;
+        }
+
+        /* 空状态 */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #7f8c8d;
+        }
+
+        .empty-icon {
+            font-size: 4em;
+            margin-bottom: 20px;
+        }
+
+        .empty-state h3 {
+            font-size: 1.3em;
+            margin-bottom: 10px;
+            color: #2c3e50;
+        }
+
+        /* 响应式 */
+        @media (max-width: 768px) {
+            .container {
+                max-width: 100%;
+            }
+
+            .header h1 {
+                font-size: 1.8em;
+            }
+
+            .search-box {
+                flex-direction: column;
+            }
+
+            .result-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .images-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* 统计信息 */
+        .stats {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #e8f4f8;
+            border-radius: 8px;
+            color: #2c3e50;
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .stat-label {
+            color: #7f8c8d;
+        }
+
+        .stat-value {
+            font-weight: 600;
+            color: #667eea;
+            font-size: 1.1em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏥 医院SPD规则库</h1>
+            <p>企业级医疗供应链智能搜索系统</p>
+        </div>
+
+        <!-- 调试面板 -->
+        <button class="debug-toggle" onclick="toggleDebug()">🔧 开启调试模式</button>
+        <div id="debugPanel" class="debug-panel">
+            <div class="debug-content" id="debugContent">等待操作...</div>
+        </div>
+
+        <!-- 搜索框 -->
+        <div class="search-box">
+            <input
+                type="text"
+                id="searchInput"
+                placeholder="例如：中山三院标签打印、出库单要求、发票流程..."
+                onkeypress="if(event.key==='Enter') performSearch()"
+            >
+            <button id="searchBtn" onclick="performSearch()">🔍 搜索</button>
+        </div>
+
+        <!-- 统计 -->
+        <div id="statsContainer" style="display: none;">
+            <div class="stats">
+                <div class="stat-item">
+                    <span class="stat-label">查询词：</span>
+                    <span class="stat-value" id="queryTerm"></span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">找到结果：</span>
+                    <span class="stat-value" id="resultCount">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">搜索耗时：</span>
+                    <span class="stat-value" id="searchTime">-</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 错误 -->
+        <div id="errorContainer" style="display: none;">
+            <div class="error-message">
+                <strong>❌ 错误：</strong>
+                <span id="errorMessage"></span>
+            </div>
+        </div>
+
+        <!-- 加载中 -->
+        <div id="loadingContainer" style="display: none;">
+            <div class="loading">
+                <div class="spinner"></div>
+                <p>正在搜索规则库...</p>
+            </div>
+        </div>
+
+        <!-- 结果 -->
+        <div id="resultsContainer" class="results" style="display: none;"></div>
+
+        <!-- 空状态 -->
+        <div id="emptyContainer" style="display: none;">
+            <div class="empty-state">
+                <div class="empty-icon">🔎</div>
+                <h3>还没有搜索结果</h3>
+                <p>输入关键词开始搜索医院规则库</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000/api';
+        const IMAGE_TIMEOUT = 8000; // 8秒超时
+        let debugMode = false;
+
+        // 调试日志
+        function addDebug(message) {
+            const debugContent = document.getElementById('debugContent');
+            const timestamp = new Date().toLocaleTimeString();
+            debugContent.textContent += `[${timestamp}] ${message}\n`;
+            debugContent.scrollTop = debugContent.scrollHeight;
+            console.log(`[DEBUG] ${message}`);
+        }
+
+        function toggleDebug() {
+            debugMode = !debugMode;
+            const panel = document.getElementById('debugPanel');
+            panel.classList.toggle('show');
+            document.querySelector('.debug-toggle').textContent = debugMode ? '🔧 关闭调试模式' : '🔧 开启调试模式';
+            addDebug(`调试模式 ${debugMode ? '已启用' : '已禁用'}`);
+        }
+
+        // 隐藏所有容器
+        function hideAllContainers() {
+            document.getElementById('statsContainer').style.display = 'none';
+            document.getElementById('errorContainer').style.display = 'none';
+            document.getElementById('loadingContainer').style.display = 'none';
+            document.getElementById('resultsContainer').style.display = 'none';
+            document.getElementById('emptyContainer').style.display = 'none';
+        }
+
+        // 显示错误
+        function showError(message) {
+            hideAllContainers();
+            document.getElementById('errorMessage').textContent = message;
+            document.getElementById('errorContainer').style.display = 'block';
+            addDebug(`❌ 错误: ${message}`);
+        }
+
+        // 显示加载中
+        function showLoading() {
+            hideAllContainers();
+            document.getElementById('loadingContainer').style.display = 'block';
+            addDebug('🔄 开始搜索...');
+        }
+
+        // 执行搜索
+        async function performSearch() {
+            const query = document.getElementById('searchInput').value.trim();
+
+            if (!query) {
+                showError('请输入搜索词');
+                return;
+            }
+
+            showLoading();
+            const startTime = Date.now();
+            addDebug(`📝 搜索词: "${query}"`);
+
+            try {
+                const url = `${API_BASE}/search?query=${encodeURIComponent(query)}&top_k=5`;
+                addDebug(`📡 请求URL: ${url}`);
+
+                const response = await fetch(url, { method: 'POST' });
+                const data = await response.json();
+                const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+
+                addDebug(`✅ 搜索完成 (${elapsed}s)`);
+                addDebug(`📊 返回 ${data.results?.length || 0} 条结果`);
+
+                if (data.status !== 'success') {
+                    showError(data.detail || '搜索失败');
+                    return;
+                }
+
+                if (!data.results || data.results.length === 0) {
+                    hideAllContainers();
+                    document.getElementById('queryTerm').textContent = query;
+                    document.getElementById('resultCount').textContent = '0';
+                    document.getElementById('searchTime').textContent = `${elapsed}s`;
+                    document.getElementById('statsContainer').style.display = 'block';
+                    document.getElementById('emptyContainer').style.display = 'block';
+                    return;
+                }
+
+                renderResults(data.results, query, elapsed);
+
+            } catch (error) {
+                console.error('Search error:', error);
+                addDebug(`❌ 搜索异常: ${error.message}`);
+                showError(`搜索出错：${error.message}`);
+            }
+        }
+
+        // 渲染结果
+        function renderResults(results, query, elapsed) {
+            hideAllContainers();
+
+            document.getElementById('queryTerm').textContent = query;
+            document.getElementById('resultCount').textContent = results.length;
+            document.getElementById('searchTime').textContent = `${elapsed}s`;
+            document.getElementById('statsContainer').style.display = 'block';
+
+            const resultsHtml = results.map((result, index) => {
+                return `
+                    <div class="result-card">
+                        <div class="result-header">
+                            <div>
+                                <h2>${escapeHtml(result.hospital)}</h2>
+                                <div class="result-score">相关度: ${(result.score * 100).toFixed(1)}%</div>
+                            </div>
+                            <div class="result-rank">第 ${result.rank} 条</div>
+                        </div>
+                        <div class="result-content">
+                            <div class="result-text">${escapeHtml(result.text)}</div>
+                            ${renderImages(result.images)}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            document.getElementById('resultsContainer').innerHTML = resultsHtml;
+            document.getElementById('resultsContainer').style.display = 'grid';
+
+            addDebug(`🎨 渲染完成`);
+        }
+
+        // 渲染图片 - 改进版
+        function renderImages(images) {
+            if (!images || images.length === 0) {
+                return '';
+            }
+
+            const imagesHtml = images.map((img, idx) => `
+                <div class="image-card">
+                    <div class="image-container" id="img-container-${idx}">
+                        <div class="image-loading spinner"></div>
+                    </div>
+                    <div class="image-info">
+                        <div class="image-hospital">${escapeHtml(img.hospital)}</div>
+                        <div class="image-filename">${escapeHtml(img.path)}</div>
+                        <div class="image-status loading" id="img-status-${idx}">⏳ 加载中...</div>
+                    </div>
+                </div>
+            `).join('');
+
+            // 异步加载图片
+            setTimeout(() => {
+                images.forEach((img, idx) => {
+                    loadImageAsync(img, idx);
+                });
+            }, 0);
+
+            return `
+                <div class="images-section">
+                    <div class="images-title">🖼️ 相关图片 (${images.length})</div>
+                    <div class="images-grid">
+                        ${imagesHtml}
+                    </div>
+                </div>
+            `;
+        }
+
+        // 异步加载图片 - 带超时处理
+        function loadImageAsync(img, idx) {
+            const container = document.getElementById(`img-container-${idx}`);
+            const statusEl = document.getElementById(`img-status-${idx}`);
+
+            if (!container) return;
+
+            const imgElement = document.createElement('img');
+            let imageLoaded = false;
+            let imageTimeout;
+
+            // 超时处理
+            imageTimeout = setTimeout(() => {
+                if (!imageLoaded) {
+                    addDebug(`⏱️ 图片超时 (${img.path})`);
+                    container.innerHTML = `
+                        <div class="image-error">
+                            <div class="image-error-icon">⏱️</div>
+                            <div class="image-error-text">加载超时<br>(${IMAGE_TIMEOUT/1000}s)</div>
+                        </div>
+                    `;
+                    if (statusEl) {
+                        statusEl.className = 'image-status error';
+                        statusEl.textContent = '❌ 加载超时';
+                    }
+                }
+            }, IMAGE_TIMEOUT);
+
+            imgElement.onload = () => {
+                imageLoaded = true;
+                clearTimeout(imageTimeout);
+                container.innerHTML = '';
+                container.appendChild(imgElement);
+                if (statusEl) {
+                    statusEl.className = 'image-status success';
+                    statusEl.textContent = '✅ 已加载';
+                }
+                addDebug(`✅ 图片已加载 (${img.path})`);
+            };
+
+            imgElement.onerror = () => {
+                imageLoaded = true;
+                clearTimeout(imageTimeout);
+                container.innerHTML = `
+                    <div class="image-error">
+                        <div class="image-error-icon">❌</div>
+                        <div class="image-error-text">加载失败</div>
+                    </div>
+                `;
+                if (statusEl) {
+                    statusEl.className = 'image-status error';
+                    statusEl.textContent = '❌ 加载失败';
+                }
+                addDebug(`❌ 图片加载失败 (${img.path})`);
+            };
+
+            imgElement.src = img.url;
+            addDebug(`📥 开始加载图片: ${img.url}`);
+        }
+
+        // HTML转义
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // 初始化
+        document.getElementById('emptyContainer').style.display = 'block';
+        addDebug('✅ 页面已加载');
+    </script>
+</body>
+</html>

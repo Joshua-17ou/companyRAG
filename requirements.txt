@@ -1,0 +1,37 @@
+# Web framework
+fastapi
+uvicorn
+
+# Database
+sqlalchemy
+asyncpg
+psycopg2-binary
+pydantic
+pydantic-settings
+python-dotenv
+
+# Vector DB & cache
+qdrant-client
+redis
+
+# PDF processing
+pymupdf
+
+# PDF OCR (扫描版)
+# RapidOCR over PaddleOCR: paddlepaddle 2.6.x SIGILL on CPUs without AVX-512
+rapidocr-onnxruntime
+Pillow
+
+# LLM & embeddings
+anthropic
+openai
+httpx
+llama-index
+llama-index-llms-anthropic
+llama-index-llms-openai
+llama-index-vector-stores-qdrant
+sentence-transformers
+modelscope
+
+# Frontend (Streamlit fallback)
+streamlit

@@ -1,0 +1,21 @@
+# 排除大的模型缓存和数据目录
+models/
+__pycache__/
+*.pyc
+.pytest_cache/
+.env
+.env.local
+.git/
+.gitignore
+.DS_Store
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+tests/
+docs/
+.idea/
+.vscode/
+backups/
+*.md

@@ -1,0 +1,163 @@
+version: '3.8'
+
+services:
+  # 向量数据库
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: rag_qdrant
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    environment:
+      - QDRANT__SERVICE__GRPC_PORT=6334
+    restart: unless-stopped
+    networks:
+      - rag_network
+
+  # 关系数据库
+  postgres:
+    image: postgres:15-alpine
+    container_name: rag_postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: knowledge_base
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin_password_dev
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/01_schema.sql
+    restart: unless-stopped
+    networks:
+      - rag_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d knowledge_base"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 缓存
+  redis:
+    image: redis:7-alpine
+    container_name: rag_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - rag_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 对象存储
+  minio:
+    image: minio/minio:latest
+    container_name: rag_minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin_password_dev
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    restart: unless-stopped
+    networks:
+      - rag_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # RAG 应用服务（前后端一起运行）
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rag_app
+    ports:
+      - "8000:8000"
+      - "8501:8501"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://admin:admin_password_dev@postgres:5432/knowledge_base
+      REDIS_URL: redis://redis:6379/0
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_COLLECTION_NAME: rag_documents
+      MINIO_URL: http://minio:9000
+      MINIO_CONSOLE_URL: http://minio:9001
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin_password_dev
+      MINIO_BUCKET: knowledge-base
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      API_DEBUG: "false"
+      # 方案 B：受控有限状态 RAG Agent，默认关闭，便于回滚到 simple 模式
+      RAG_AGENT_ENABLED: "${RAG_AGENT_ENABLED:-false}"
+      RAG_AGENT_DEFAULT_MODE: "${RAG_AGENT_DEFAULT_MODE:-simple}"
+      RAG_AGENT_MAX_RETRIEVAL_ATTEMPTS: "${RAG_AGENT_MAX_RETRIEVAL_ATTEMPTS:-2}"
+      RAG_AGENT_RECOVERY_TOP_K: "${RAG_AGENT_RECOVERY_TOP_K:-6}"
+      RAG_AGENT_MIN_RESULTS: "${RAG_AGENT_MIN_RESULTS:-1}"
+      RAG_AGENT_CLARIFY_ON_MISSING_HOSPITAL: "${RAG_AGENT_CLARIFY_ON_MISSING_HOSPITAL:-true}"
+      # 扫描版 PDF OCR
+      PDF_OCR_ENABLED: "${PDF_OCR_ENABLED:-true}"
+      PDF_OCR_LANG: "${PDF_OCR_LANG:-ch}"
+      PDF_OCR_DPI: "${PDF_OCR_DPI:-200}"
+      PDF_OCR_MIN_CONFIDENCE: "${PDF_OCR_MIN_CONFIDENCE:-0.0}"
+      PDF_SCANNED_MIN_CHARS: "${PDF_SCANNED_MIN_CHARS:-50}"
+      PDF_MAX_UPLOAD_MB: "${PDF_MAX_UPLOAD_MB:-200}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+      minio:
+        condition: service_healthy
+    volumes:
+      - ./models:/app/models
+      - ./src:/app/src
+      - ./app.py:/app/app.py
+      - ./docs:/app/docs
+      - ./scripts:/app/scripts
+    restart: unless-stopped
+    networks:
+      - rag_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    container_name: rag_frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - app
+    networks:
+      - rag_network
+    restart: unless-stopped
+
+volumes:
+  qdrant_storage:
+  postgres_data:
+  redis_data:
+  minio_data:
+
+networks:
+  rag_network:
+    driver: bridge
