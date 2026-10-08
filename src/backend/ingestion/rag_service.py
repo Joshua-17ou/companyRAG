@@ -851,7 +851,11 @@ class RAGService:
                     logger.info(f"Intent confidence {confidence} < 0.85, skipping doc_type filter")
 
             # 权限过滤
-            if user_dept:
+            # 「全员」：飞书暂无部门时的默认策略，跳过部门过滤（全员可见）
+            # 注意：原网页版只会传 销售/财务/行政 等，不会命中此分支
+            if user_dept in ["全员", "all"]:
+                logger.info("Permission filter skipped: user_dept=全员（全员可见）")
+            elif user_dept:
                 original_count = len(nodes)
                 filtered_nodes = []
 

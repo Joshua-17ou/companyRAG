@@ -83,7 +83,10 @@ ppt_unzip/
 temp_ragent/
 
 # Knowledge base content and docs (managed outside git)
-docs/
+# 注意：必须用 docs/* 而不是 docs/，否则无法用 ! 重新纳入单个文件（父目录被排除时 git 不会下探）
+docs/*
 *.md
 !README.md
+# 部署偏离登记表属于规范要求的可追溯记录，必须入库
+!docs/deploy-exception.md
 *_assets/
