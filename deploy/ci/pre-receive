@@ -1,0 +1,33 @@
+#!/bin/bash
+#
+# 裸仓库 pre-receive 钩子（安装到 /opt/company-rag/repo/company-rag.git/hooks/pre-receive）
+#
+# 只做一件事：把不合规的推送挡在部署之前。
+#   - 只接受 refs/heads/main（规范：部署来源只能是 main）
+#   - 禁止删除 main
+#   - 禁止非快进推送（即禁止 --force）
+#
+set -euo pipefail
+
+ZERO="0000000000000000000000000000000000000000"
+
+while read -r oldrev newrev refname; do
+    if [ "${refname}" != "refs/heads/main" ]; then
+        echo "❌ 拒绝推送：只允许推送到 refs/heads/main（收到 ${refname}）" >&2
+        exit 1
+    fi
+
+    if [ "${newrev}" = "${ZERO}" ]; then
+        echo "❌ 拒绝推送：禁止删除 main 分支" >&2
+        exit 1
+    fi
+
+    if [ "${oldrev}" != "${ZERO}" ]; then
+        if ! git merge-base --is-ancestor "${oldrev}" "${newrev}"; then
+            echo "❌ 拒绝推送：非快进推送（禁止 --force），请先 rebase 到最新 main" >&2
+            exit 1
+        fi
+    fi
+done
+
+echo "✅ pre-receive 检查通过"

@@ -35,3 +35,6 @@ modelscope
 
 # Frontend (Streamlit fallback)
 streamlit
+
+# 飞书免登（LARK_ENABLED=false 时不会被导入，仅启用时需要）
+PyJWT

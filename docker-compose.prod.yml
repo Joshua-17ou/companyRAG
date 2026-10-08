@@ -1,0 +1,211 @@
+# 生产环境编排（广州生产机 / 本环境只部署飞书版）
+#
+# 与开发用 docker-compose.yml 完全独立，互不影响：
+#   - 生产机不构建：全部服务使用已加载镜像（pull_policy: never），本文件无 build 段
+#   - 镜像版本来自 shared/.env 的 *_IMAGE，由 post-receive 钩子按发布提交的 40 位 SHA 改写
+#   - 唯一对外端口监听回环 127.0.0.1，公网流量一律走 cert-gateway
+#   - 密钥不落配置文件：一律走 /opt/company-rag/shared/secrets/ 文件挂载
+#
+# 调用方式（只允许由 deploy/ci/post-receive 钩子调用，禁止手工 up）：
+#   docker compose --env-file /opt/company-rag/shared/.env \
+#     -f /opt/company-rag/current/docker-compose.prod.yml up -d
+
+x-app-secrets: &app-secrets
+  - db_app_password
+  - app_secret_key
+  - lark_app_secret
+  - lark_jwt_secret
+  - deepseek_api_key
+
+x-db-secrets: &db-secrets
+  - db_admin_password
+  - db_migration_password
+  - db_app_password
+  - db_backup_password
+
+services:
+  # ================= 基础设施 =================
+
+  postgres:
+    image: ${POSTGRES_IMAGE:?POSTGRES_IMAGE 未配置，请检查 shared/.env}
+    init: true
+    pull_policy: never
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: knowledge_base
+      POSTGRES_USER: admin
+      # 官方镜像支持从文件读取初始管理员密码，避免明文进配置
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_admin_password
+    secrets: *db-secrets
+    volumes:
+      - /opt/company-rag/shared/data/postgres:/var/lib/postgresql/data
+      # 仅空数据卷首次启动时由 postgres entrypoint 执行（非幂等，勿重复执行）
+      - /opt/company-rag/current/scripts/init_db.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d knowledge_base"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [rag_net]
+
+  redis:
+    image: ${REDIS_IMAGE:?REDIS_IMAGE 未配置，请检查 shared/.env}
+    init: true
+    pull_policy: never
+    restart: unless-stopped
+    volumes:
+      - /opt/company-rag/shared/data/redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [rag_net]
+
+  qdrant:
+    image: ${QDRANT_IMAGE:?QDRANT_IMAGE 未配置，请检查 shared/.env}
+    init: true
+    pull_policy: never
+    restart: unless-stopped
+    environment:
+      QDRANT__SERVICE__GRPC_PORT: "6334"
+    volumes:
+      - /opt/company-rag/shared/data/qdrant:/qdrant/storage
+    networks: [rag_net]
+
+  minio:
+    image: ${MINIO_IMAGE:?MINIO_IMAGE 未配置，请检查 shared/.env}
+    init: true
+    pull_policy: never
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER 未配置，请检查 shared/.env}
+      MINIO_ROOT_PASSWORD_FILE: /run/secrets/minio_root_password
+    secrets:
+      - minio_root_password
+    volumes:
+      - /opt/company-rag/shared/data/minio:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [rag_net]
+
+  # ================= 应用 =================
+
+  app:
+    image: ${APP_IMAGE:?APP_IMAGE 未配置，请检查 shared/.env}
+    init: true
+    pull_policy: never
+    restart: unless-stopped
+    # 生产端口仅启动 FastAPI（不启动 Streamlit）；密钥由该脚本从 /run/secrets 组装
+    entrypoint: ["/bin/bash", "/app/scripts/entrypoint_prod.sh"]
+    env_file:
+      - /opt/company-rag/shared/.env
+    environment:
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:?MINIO_ROOT_USER 未配置，请检查 shared/.env}
+    secrets: *app-secrets
+    volumes:
+      - /opt/company-rag/shared/models:/app/models:ro
+      - /opt/company-rag/shared/kb:/app/docs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 180s
+    networks: [rag_net]
+
+  frontend:
+    image: ${FRONTEND_IMAGE:?FRONTEND_IMAGE 未配置，请检查 shared/.env}
+    init: true
+    pull_policy: never
+    restart: unless-stopped
+    # 全环境唯一对外端口：只监听回环，由 cert-gateway 反代
+    ports:
+      - "127.0.0.1:${UPSTREAM_PORT:?UPSTREAM_PORT 未配置，请检查 shared/.env}:80"
+    depends_on:
+      app:
+        condition: service_started
+    networks: [rag_net]
+
+  # ================= 一次性任务（profiles: init，不随 up 启动） =================
+
+  # 创建 rag_migration / rag_app / rag_backup 三个最小权限角色（幂等，可重复执行）
+  db-init:
+    image: ${APP_IMAGE:?APP_IMAGE 未配置，请检查 shared/.env}
+    profiles: ["init"]
+    init: true
+    restart: "no"
+    pull_policy: never
+    entrypoint: ["/bin/bash", "/deploy/db/init-roles.sh"]
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: knowledge_base
+      POSTGRES_ADMIN_USER: admin
+    secrets: *db-secrets
+    volumes:
+      - /opt/company-rag/current/deploy:/deploy:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [rag_net]
+
+  # 以 rag_migration 身份顺序执行 deploy/migrations/*.sql（幂等）
+  migrate:
+    image: ${APP_IMAGE:?APP_IMAGE 未配置，请检查 shared/.env}
+    profiles: ["init"]
+    init: true
+    restart: "no"
+    pull_policy: never
+    entrypoint: ["/bin/bash", "/deploy/db/migrate.sh"]
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: knowledge_base
+      POSTGRES_MIGRATION_USER: rag_migration
+      MIGRATIONS_DIR: /deploy/migrations
+    secrets:
+      - db_migration_password
+    volumes:
+      - /opt/company-rag/current/deploy:/deploy:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [rag_net]
+
+secrets:
+  db_admin_password:
+    file: /opt/company-rag/shared/secrets/db_admin_password
+  db_migration_password:
+    file: /opt/company-rag/shared/secrets/db_migration_password
+  db_app_password:
+    file: /opt/company-rag/shared/secrets/db_app_password
+  db_backup_password:
+    file: /opt/company-rag/shared/secrets/db_backup_password
+  minio_root_password:
+    file: /opt/company-rag/shared/secrets/minio_root_password
+  app_secret_key:
+    file: /opt/company-rag/shared/secrets/app_secret_key
+  lark_app_secret:
+    file: /opt/company-rag/shared/secrets/lark_app_secret
+  lark_jwt_secret:
+    file: /opt/company-rag/shared/secrets/lark_jwt_secret
+  deepseek_api_key:
+    file: /opt/company-rag/shared/secrets/deepseek_api_key
+
+networks:
+  rag_net:
+    driver: bridge

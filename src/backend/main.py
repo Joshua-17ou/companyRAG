@@ -3,12 +3,13 @@ FastAPI 应用主入口
 """
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.backend.core.config import settings
 from src.backend.core.logger import logger
 from src.backend.api.routes import health, permission, auth, ingestion, images, sessions
+from src.backend.lark.install import install_lark
 from src.backend.db.database import init_db, close_db
 from src.backend.ingestion.rag_service import RAGService
 
@@ -111,6 +112,9 @@ app.include_router(ingestion.router, prefix="/api", tags=["ingestion"])
 app.include_router(images.router, prefix="/api", tags=["images"])
 app.include_router(sessions.router, prefix="/api", tags=["sessions"])
 
+# 飞书免登（LARK_ENABLED=false 时为空操作，不影响原网页版）
+install_lark(app)
+
 @app.get("/")
 async def root():
     """根路由"""
@@ -122,8 +126,21 @@ async def root():
 
 @app.get("/health")
 async def health():
-    """健康检查"""
+    """健康检查（存活）"""
     return {"status": "ok"}
+
+@app.get("/ready")
+async def ready():
+    """就绪检查：数据库可连通才返回 200，供网关与发布钩子判定"""
+    from sqlalchemy import text
+    from src.backend.db.database import AsyncSessionLocal
+    try:
+        async with AsyncSessionLocal() as session:
+            await session.execute(text("SELECT 1"))
+    except Exception as e:
+        logger.error(f"就绪检查失败: {e}")
+        raise HTTPException(status_code=503, detail="数据库不可用")
+    return {"status": "ready"}
 
 if __name__ == "__main__":
     import uvicorn

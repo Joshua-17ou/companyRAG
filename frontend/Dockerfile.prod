@@ -14,6 +14,12 @@ RUN npm config set registry https://registry.npmmirror.com && \
 # 复制源代码
 COPY . .
 
+# 构建期环境变量（Vite 在 build 时内联，缺省会导致打到 localhost:8000 且无飞书入口）
+ARG VITE_LARK_ENABLED=false
+ARG VITE_API_URL=/api
+ENV VITE_LARK_ENABLED=${VITE_LARK_ENABLED}
+ENV VITE_API_URL=${VITE_API_URL}
+
 # 构建生产版本
 RUN npm run build
 

@@ -1,0 +1,15 @@
+# 统一行尾：Shell / 钩子脚本在 Linux 容器与生产机上执行，必须保持 LF。
+# Windows 工作区默认 core.autocrlf=true，若不在此声明，重新检出会把脚本变成 CRLF，
+# 导致容器内 /bin/bash 报 "bad interpreter: /bin/bash^M" 或 $'\r': command not found。
+
+*.sh                    text eol=lf
+deploy/ci/pre-receive   text eol=lf
+deploy/ci/post-receive  text eol=lf
+
+*.py                    text eol=lf
+*.sql                   text eol=lf
+*.yml                   text eol=lf
+*.yaml                  text eol=lf
+*.conf                  text eol=lf
+Dockerfile*             text eol=lf
+*.env.example           text eol=lf
